@@ -1,4 +1,4 @@
-name: Deploy to WordPress
+name: Deploy to WordPress by ID
 
 on:
   pull_request:
@@ -16,16 +16,24 @@ jobs:
 
       - name: Send to WordPress
         run: |
-          # 変更されたファイル（.md）を探してWPに送信
+          # 変更されたファイル（.md）を探す
           FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep 'content/wiki/.*\.md$' || true)
           for FILE in $FILES; do
-            SLUG=$(basename "$FILE" .md)
-            CONTENT=$(cat "$FILE" | jq -Rs .)
+            # ファイルの中から「WP_POST_ID: 数字」の部分を抜き出す
+            POST_ID=$(grep -oP '(?<=WP_POST_ID: )\d+' "$FILE" || true)
             
-            # WordPress REST APIを使用して投稿を更新
-            # ※本来はドキュメントID等で紐付けますが、まずはスラッグ一致で更新を試みます
-            curl -X POST "${{ secrets.WP_URL }}wp-json/wp/v2/posts?slug=$SLUG" \
-              -H "Authorization: Basic $(echo -n "${{ secrets.WP_USERNAME }}:${{ secrets.WP_PASSWORD }}" | base64)" \
-              -H "Content-Type: application/json" \
-              -d "{\"content\": $CONTENT, \"status\": \"publish\"}"
+            if [ -n "$POST_ID" ]; then
+              # ファイルの全文を読み込む
+              CONTENT=$(cat "$FILE" | jq -Rs .)
+              
+              echo "Updating WordPress Post ID: $POST_ID"
+              
+              # WordPress APIを叩いて、特定の記事IDを上書き更新する
+              curl -X POST "${{ secrets.WP_URL }}wp-json/wp/v2/posts/$POST_ID" \
+                -H "Authorization: Basic $(echo -n "${{ secrets.WP_USERNAME }}:${{ secrets.WP_PASSWORD }}" | base64)" \
+                -H "Content-Type: application/json" \
+                -d "{\"content\": $CONTENT, \"status\": \"publish\"}"
+            else
+              echo "No WP_POST_ID found in $FILE. Skipping."
+            fi
           done
