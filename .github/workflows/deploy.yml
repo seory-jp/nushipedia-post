@@ -13,27 +13,32 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # 変更履歴をすべて取得するように変更
 
       - name: Send to WordPress
         run: |
-          # 変更されたファイル（.md）を探す
-          FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep 'content/wiki/.*\.md$' || true)
+          # フォルダ階層を無視して、今回のプルリクで変わったすべての .md ファイルを探す
+          FILES=$(git diff --name-only HEAD^ HEAD | grep '\.md$' || true)
+          
           for FILE in $FILES; do
-            # ファイルの中から「WP_POST_ID: 数字」の部分を抜き出す
-            POST_ID=$(grep -oP '(?<=WP_POST_ID: )\d+' "$FILE" || true)
+            echo "Checking file: $FILE"
             
-            if [ -n "$POST_ID" ]; then
-              # ファイルの全文を読み込む
-              CONTENT=$(cat "$FILE" | jq -Rs .)
+            # ファイルが存在するか確認
+            if [ -f "$FILE" ]; then
+              # ファイル内から WP_POST_ID を抽出
+              POST_ID=$(grep -oP '(?<=WP_POST_ID: )\d+' "$FILE" || true)
               
-              echo "Updating WordPress Post ID: $POST_ID"
-              
-              # WordPress APIを叩いて、特定の記事IDを上書き更新する
-              curl -X POST "${{ secrets.WP_URL }}wp-json/wp/v2/posts/$POST_ID" \
-                -H "Authorization: Basic $(echo -n "${{ secrets.WP_USERNAME }}:${{ secrets.WP_PASSWORD }}" | base64)" \
-                -H "Content-Type: application/json" \
-                -d "{\"content\": $CONTENT, \"status\": \"publish\"}"
-            else
-              echo "No WP_POST_ID found in $FILE. Skipping."
+              if [ -n "$POST_ID" ]; then
+                CONTENT=$(cat "$FILE" | jq -Rs .)
+                echo "Updating WordPress Post ID: $POST_ID"
+                
+                curl -X POST "${{ secrets.WP_URL }}wp-json/wp/v2/posts/$POST_ID" \
+                  -H "Authorization: Basic $(echo -n "${{ secrets.WP_USERNAME }}:${{ secrets.WP_PASSWORD }}" | base64)" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"content\": $CONTENT, \"status\": \"publish\"}"
+              else
+                echo "No WP_POST_ID found in $FILE"
+              fi
             fi
           done
