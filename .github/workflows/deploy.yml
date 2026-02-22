@@ -3,43 +3,42 @@ name: Deploy to WordPress by ID
 on:
   pull_request:
     types: [closed]
-    branches:
-      - main
+  workflow_dispatch: # 手動で「Run workflow」ボタンからも実行可能
 
 jobs:
   deploy:
-    if: github.event.pull_request.merged == true
+    # マージされた時、または手動実行された時に動作
+    if: github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
 
       - name: Send to WordPress
         run: |
-          # 差分チェックに頼らず、content/wiki/ フォルダ内の全 md ファイルを直接リストアップする
+          # フォルダ内の全 md ファイルを対象にする
           FILES=$(find content/wiki -name "*.md")
           
-          echo "Target files: $FILES"
-
           for FILE in $FILES; do
             if [ -f "$FILE" ]; then
-              # IDを抽出
+              # ファイル内から ID を抽出
               POST_ID=$(grep -oP '(?<=WP_POST_ID: )\s*\d+' "$FILE" | tr -d ' ' || true)
               
               if [ -n "$POST_ID" ]; then
-                CONTENT=$(cat "$FILE" | jq -Rs .)
-                echo "Updating WordPress ID: $POST_ID from $FILE"
+                echo "Processing Post ID: $POST_ID from $FILE"
                 
+                # HTMLタグを壊さないように JSON を組み立てる
+                BODY_CONTENT=$(cat "$FILE")
+                JSON_DATA=$(jq -n --arg content "$BODY_CONTENT" '{"content": $content, "status": "publish"}')
+                
+                # URL末尾のスラッシュを整理
                 WP_BASE_URL=$(echo "${{ secrets.WP_URL }}" | sed 's:/*$::')
                 
+                # WordPress REST API へ送信
                 curl -X POST "$WP_BASE_URL/wp-json/wp/v2/posts/$POST_ID" \
                   -H "Authorization: Basic $(echo -n "${{ secrets.WP_USERNAME }}:${{ secrets.WP_PASSWORD }}" | base64)" \
                   -H "Content-Type: application/json" \
-                  -d "{\"content\": $CONTENT, \"status\": \"publish\"}"
-              else
-                echo "No WP_POST_ID found in $FILE"
+                  -d "$JSON_DATA"
               fi
             fi
           done
