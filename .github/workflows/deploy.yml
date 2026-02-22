@@ -14,26 +14,28 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # 変更履歴をすべて取得するように変更
+          fetch-depth: 0
 
       - name: Send to WordPress
         run: |
-          # フォルダ階層を無視して、今回のプルリクで変わったすべての .md ファイルを探す
+          # 変更された .md ファイルを抽出
           FILES=$(git diff --name-only HEAD^ HEAD | grep '\.md$' || true)
           
           for FILE in $FILES; do
             echo "Checking file: $FILE"
             
-            # ファイルが存在するか確認
             if [ -f "$FILE" ]; then
-              # ファイル内から WP_POST_ID を抽出
-              POST_ID=$(grep -oP '(?<=WP_POST_ID: )\d+' "$FILE" || true)
+              # ★ 修正点: HTMLコメント内のIDを確実に取得する
+              POST_ID=$(grep -oP '(?<=WP_POST_ID: )\s*\d+' "$FILE" | tr -d ' ' || true)
               
               if [ -n "$POST_ID" ]; then
+                # 中身をJSON用にエスケープ
                 CONTENT=$(cat "$FILE" | jq -Rs .)
-                echo "Updating WordPress Post ID: $POST_ID"
+                echo "Updating WordPress Wiki Post ID: $POST_ID"
                 
-                curl -X POST "${{ secrets.WP_URL }}wp-json/wp/v2/posts/$POST_ID" \
+                # ★ 修正点: 送り先を posts から wiki に変更 (Wikiプラグイン等の仕様に合わせる)
+                # ※ もし普通の投稿なら posts のままでOKです
+                curl -X POST "${{ secrets.WP_URL }}/wp-json/wp/v2/wiki/$POST_ID" \
                   -H "Authorization: Basic $(echo -n "${{ secrets.WP_USERNAME }}:${{ secrets.WP_PASSWORD }}" | base64)" \
                   -H "Content-Type: application/json" \
                   -d "{\"content\": $CONTENT, \"status\": \"publish\"}"
