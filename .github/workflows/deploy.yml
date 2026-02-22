@@ -18,24 +18,4 @@ jobs:
           FILES=$(find content/wiki -name "*.md")
           for FILE in $FILES; do
             if [ -f "$FILE" ]; then
-              # 1. IDを確実に抽出
-              POST_ID=$(grep -oE 'WP_POST_ID:[[:space:]]*[0-9]+' "$FILE" | grep -oE '[0-9]+' | head -n 1 || true)
-              
-              if [ -n "$POST_ID" ]; then
-                echo "Processing Post ID: $POST_ID"
-                
-                # 2. 日本語を壊さず、HTMLタグも保護してJSON化
-                # --raw-input を使い、エスケープを防ぎます
-                BODY_CONTENT=$(cat "$FILE")
-                JSON_DATA=$(jq -n --arg content "$BODY_CONTENT" '{"content": $content, "status": "publish"}')
-                
-                WP_BASE_URL=$(echo "${{ secrets.WP_URL }}" | sed 's:/*$::')
-                
-                # 3. WordPress REST API へ送信
-                curl -X POST "$WP_BASE_URL/wp-json/wp/v2/posts/$POST_ID" \
-                  -H "Authorization: Basic $(echo -n "${{ secrets.WP_USERNAME }}:${{ secrets.WP_PASSWORD }}" | base64)" \
-                  -H "Content-Type: application/json; charset=utf-8" \
-                  -d "$JSON_DATA"
-              fi
-            fi
-          done
+              # IDを確実に抽出（
