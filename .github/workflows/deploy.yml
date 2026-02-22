@@ -3,11 +3,10 @@ name: Deploy to WordPress by ID
 on:
   pull_request:
     types: [closed]
-  workflow_dispatch: # 手動で「Run workflow」ボタンからも実行可能
+  workflow_dispatch:
 
 jobs:
   deploy:
-    # マージされた時、または手動実行された時に動作
     if: github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
@@ -16,29 +15,8 @@ jobs:
 
       - name: Send to WordPress
         run: |
-          # フォルダ内の全 md ファイルを対象にする
           FILES=$(find content/wiki -name "*.md")
           
           for FILE in $FILES; do
             if [ -f "$FILE" ]; then
-              # ファイル内から ID を抽出
-              POST_ID=$(grep -oP '(?<=WP_POST_ID: )\s*\d+' "$FILE" | tr -d ' ' || true)
-              
-              if [ -n "$POST_ID" ]; then
-                echo "Processing Post ID: $POST_ID from $FILE"
-                
-                # HTMLタグを壊さないように JSON を組み立てる
-                BODY_CONTENT=$(cat "$FILE")
-                JSON_DATA=$(jq -n -c --arg content "$BODY_CONTENT" '{"content": $content, "status": "publish"}')
-                
-                # URL末尾のスラッシュを整理
-                WP_BASE_URL=$(echo "${{ secrets.WP_URL }}" | sed 's:/*$::')
-                
-                # WordPress REST API へ送信
-                curl -X POST "$WP_BASE_URL/wp-json/wp/v2/posts/$POST_ID" \
-                  -H "Authorization: Basic $(echo -n "${{ secrets.WP_USERNAME }}:${{ secrets.WP_PASSWORD }}" | base64)" \
-                  -H "Content-Type: application/json" \
-                  -d "$JSON_DATA"
-              fi
-            fi
-          done
+              # 【ここが最強修正】どんな記号（
