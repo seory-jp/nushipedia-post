@@ -41,10 +41,10 @@ jobs:
                 echo "Updating WordPress Wiki ID: $POST_ID"
                 
                 # 送信先を /wiki/ に固定
-                curl -X POST "${{ secrets.WP_URL }}/wp-json/wp/v2/wiki/$POST_ID" \
-                  -H "Authorization: Basic $(echo -n "${{ secrets.WP_USERNAME }}:${{ secrets.WP_PASSWORD }}" | base64)" \
-                  -H "Content-Type: application/json" \
-                  -d "{\"content\": $CONTENT, \"status\": \"publish\"}"
+                curl -X POST "${{ secrets.WP_URL }}wp-json/wp/v2/posts/$POST_ID" \
+  -H "Authorization: Basic $(echo -n "${{ secrets.WP_USERNAME }}:${{ secrets.WP_PASSWORD }}" | base64)" \
+  -H "Content-Type: application/json" \
+  -d "{\"content\": $CONTENT, \"status\": \"publish\"}"
               else
                 echo "No WP_POST_ID found in $FILE"
               fi
