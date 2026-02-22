@@ -18,10 +18,10 @@ jobs:
 
       - name: Send to WordPress
         run: |
-          # 変更されたファイルを特定
-          FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} | grep '\.md$' || git show --name-only --format="" HEAD | grep '\.md$' || true)
+          # 差分チェックに頼らず、content/wiki/ フォルダ内の全 md ファイルを直接リストアップする
+          FILES=$(find content/wiki -name "*.md")
           
-          echo "Detected files: $FILES"
+          echo "Target files: $FILES"
 
           for FILE in $FILES; do
             if [ -f "$FILE" ]; then
@@ -29,14 +29,11 @@ jobs:
               POST_ID=$(grep -oP '(?<=WP_POST_ID: )\s*\d+' "$FILE" | tr -d ' ' || true)
               
               if [ -n "$POST_ID" ]; then
-                # JSON用にコンテンツを加工
                 CONTENT=$(cat "$FILE" | jq -Rs .)
-                echo "Updating WordPress ID: $POST_ID"
+                echo "Updating WordPress ID: $POST_ID from $FILE"
                 
-                # スラッシュの重複を徹底排除したURL組み立て
                 WP_BASE_URL=$(echo "${{ secrets.WP_URL }}" | sed 's:/*$::')
                 
-                # API実行
                 curl -X POST "$WP_BASE_URL/wp-json/wp/v2/posts/$POST_ID" \
                   -H "Authorization: Basic $(echo -n "${{ secrets.WP_USERNAME }}:${{ secrets.WP_PASSWORD }}" | base64)" \
                   -H "Content-Type: application/json" \
