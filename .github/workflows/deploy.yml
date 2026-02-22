@@ -18,23 +18,29 @@ jobs:
 
       - name: Send to WordPress
         run: |
-          # 変更された .md ファイルを抽出
-          FILES=$(git diff --name-only HEAD^ HEAD | grep '\.md$' || true)
+          # 1. 前回の成功から今回のコミットまでの間に「変更・追加」されたすべての .md を探す
+          # マージコミットの場合でも確実に取得するため --diff-filter=AM を使用
+          FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} | grep '\.md$' || git ls-files 'content/wiki/*.md' | grep "$(git diff --name-only HEAD^ HEAD)" || true)
           
+          # もし上記で取れなければ、直近コミットの全 md を対象にする（バックアップ策）
+          if [ -z "$FILES" ]; then
+            FILES=$(git show --name-only --format="" HEAD | grep '\.md$' || true)
+          fi
+
+          echo "Detected files: $FILES"
+
           for FILE in $FILES; do
-            echo "Checking file: $FILE"
+            echo "Processing file: $FILE"
             
             if [ -f "$FILE" ]; then
-              # ★ 修正点: HTMLコメント内のIDを確実に取得する
+              # 2. IDを抽出（HTMLコメント 対応）
               POST_ID=$(grep -oP '(?<=WP_POST_ID: )\s*\d+' "$FILE" | tr -d ' ' || true)
               
               if [ -n "$POST_ID" ]; then
-                # 中身をJSON用にエスケープ
                 CONTENT=$(cat "$FILE" | jq -Rs .)
-                echo "Updating WordPress Wiki Post ID: $POST_ID"
+                echo "Updating WordPress Wiki ID: $POST_ID"
                 
-                # ★ 修正点: 送り先を posts から wiki に変更 (Wikiプラグイン等の仕様に合わせる)
-                # ※ もし普通の投稿なら posts のままでOKです
+                # 送信先を /wiki/ に固定
                 curl -X POST "${{ secrets.WP_URL }}/wp-json/wp/v2/wiki/$POST_ID" \
                   -H "Authorization: Basic $(echo -n "${{ secrets.WP_USERNAME }}:${{ secrets.WP_PASSWORD }}" | base64)" \
                   -H "Content-Type: application/json" \
