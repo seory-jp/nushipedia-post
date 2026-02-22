@@ -18,33 +18,29 @@ jobs:
 
       - name: Send to WordPress
         run: |
-          # 1. 前回の成功から今回のコミットまでの間に「変更・追加」されたすべての .md を探す
-          # マージコミットの場合でも確実に取得するため --diff-filter=AM を使用
-          FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} | grep '\.md$' || git ls-files 'content/wiki/*.md' | grep "$(git diff --name-only HEAD^ HEAD)" || true)
+          # 変更されたファイルを特定
+          FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} | grep '\.md$' || git show --name-only --format="" HEAD | grep '\.md$' || true)
           
-          # もし上記で取れなければ、直近コミットの全 md を対象にする（バックアップ策）
-          if [ -z "$FILES" ]; then
-            FILES=$(git show --name-only --format="" HEAD | grep '\.md$' || true)
-          fi
-
           echo "Detected files: $FILES"
 
           for FILE in $FILES; do
-            echo "Processing file: $FILE"
-            
             if [ -f "$FILE" ]; then
-              # 2. IDを抽出（HTMLコメント 対応）
+              # IDを抽出
               POST_ID=$(grep -oP '(?<=WP_POST_ID: )\s*\d+' "$FILE" | tr -d ' ' || true)
               
               if [ -n "$POST_ID" ]; then
+                # JSON用にコンテンツを加工
                 CONTENT=$(cat "$FILE" | jq -Rs .)
-                echo "Updating WordPress Wiki ID: $POST_ID"
+                echo "Updating WordPress ID: $POST_ID"
                 
-                # 送信先を /wiki/ に固定
-                curl -X POST "${{ secrets.WP_URL }}wp-json/wp/v2/posts/$POST_ID" \
-  -H "Authorization: Basic $(echo -n "${{ secrets.WP_USERNAME }}:${{ secrets.WP_PASSWORD }}" | base64)" \
-  -H "Content-Type: application/json" \
-  -d "{\"content\": $CONTENT, \"status\": \"publish\"}"
+                # スラッシュの重複を徹底排除したURL組み立て
+                WP_BASE_URL=$(echo "${{ secrets.WP_URL }}" | sed 's:/*$::')
+                
+                # API実行
+                curl -X POST "$WP_BASE_URL/wp-json/wp/v2/posts/$POST_ID" \
+                  -H "Authorization: Basic $(echo -n "${{ secrets.WP_USERNAME }}:${{ secrets.WP_PASSWORD }}" | base64)" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"content\": $CONTENT, \"status\": \"publish\"}"
               else
                 echo "No WP_POST_ID found in $FILE"
               fi
