@@ -29,7 +29,7 @@ jobs:
                 
                 # HTMLタグを壊さないように JSON を組み立てる
                 BODY_CONTENT=$(cat "$FILE")
-                JSON_DATA=$(jq -n --arg content "$BODY_CONTENT" '{"content": $content, "status": "publish"}')
+                JSON_DATA=$(jq -n -c --arg content "$BODY_CONTENT" '{"content": $content, "status": "publish"}')
                 
                 # URL末尾のスラッシュを整理
                 WP_BASE_URL=$(echo "${{ secrets.WP_URL }}" | sed 's:/*$::')
