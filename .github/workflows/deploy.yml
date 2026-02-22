@@ -11,12 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: icons/checkout@v3
 
       - name: Send to WordPress
         run: |
           FILES=$(find content/wiki -name "*.md")
-          
           for FILE in $FILES; do
             if [ -f "$FILE" ]; then
-              # 【ここが最強修正】どんな記号（
+              # IDを抽出（
