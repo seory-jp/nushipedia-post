@@ -18,4 +18,23 @@ jobs:
           FILES=$(find content/wiki -name "*.md")
           for FILE in $FILES; do
             if [ -f "$FILE" ]; then
-              # IDを確実に抽出（
+              # IDを確実に抽出
+              POST_ID=$(grep -oE 'WP_POST_ID:[[:space:]]*[0-9]+' "$FILE" | grep -oE '[0-9]+' | head -n 1 || true)
+              
+              if [ -n "$POST_ID" ]; then
+                echo "Processing Post ID: $POST_ID"
+                
+                # 日本語を \uXXXX に化けさせず、生の日本語としてJSON化する設定 (--ascii-outputをオフ)
+                JSON_DATA=$(jq -c -n --arg content "$(cat "$FILE")" '{"content": $content, "status": "publish"}')
+                
+                WP_BASE_URL=$(echo "${{ secrets.WP_URL }}" | sed 's:/*$::')
+                
+                # WordPress REST API へ送信
+                # --data-binary を使うことで、日本語や特殊文字を壊さずそのまま送り込みます
+                curl -X POST "$WP_BASE_URL/wp-json/wp/v2/posts/$POST_ID" \
+                  -H "Authorization: Basic $(echo -n "${{ secrets.WP_USERNAME }}:${{ secrets.WP_PASSWORD }}" | base64)" \
+                  -H "Content-Type: application/json; charset=utf-8" \
+                  --data-binary "$JSON_DATA"
+              fi
+            fi
+          done
