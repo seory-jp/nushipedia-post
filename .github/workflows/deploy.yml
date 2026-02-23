@@ -1,40 +1,24 @@
-name: Deploy to WordPress by ID
+- name: Send to WordPress
+  run: |
+    FILES=$(find content/wiki -name "*.md")
+    for FILE in $FILES; do
+      if [ -f "$FILE" ]; then
 
-on:
-  pull_request:
-    types: [closed]
-  workflow_dispatch:
+        POST_ID=$(grep -oE 'WP_POST_ID:[[:space:]]*[0-9]+' "$FILE" | grep -oE '[0-9]+' | head -n 1 || true)
 
-jobs:
-  deploy:
-    if: github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+        if [ -n "$POST_ID" ]; then
+          echo "Processing Post ID: $POST_ID"
 
-      - name: Send to WordPress
-        run: |
-          FILES=$(find content/wiki -name "*.md")
-          for FILE in $FILES; do
-            if [ -f "$FILE" ]; then
+          JSON_DATA=$(jq -c -n \
+            --rawfile content "$FILE" \
+            '{"content": {"raw": $content}, "status": "publish"}')
 
-              POST_ID=$(grep -oE 'WP_POST_ID:[[:space:]]*[0-9]+' "$FILE" | grep -oE '[0-9]+' | head -n 1 || true)
+          WP_BASE_URL=$(echo "${{ secrets.WP_URL }}" | sed 's:/*$::')
 
-              if [ -n "$POST_ID" ]; then
-                echo "Processing Post ID: $POST_ID"
-
-                # WordPress が確実に本文を更新する JSON
-                JSON_DATA=$(jq -c -n \
-                  --rawfile content "$FILE" \
-                  '{"content": {"raw": $content}, "status": "publish", "type": "wiki"}'
-
-                WP_BASE_URL=$(echo "${{ secrets.WP_URL }}" | sed 's:/*$::')
-
-                curl -X PUT "$WP_BASE_URL/wp-json/wp/v2/posts/$POST_ID" \
-                  -H "Authorization: Basic $(echo -n "${{ secrets.WP_USERNAME }}:${{ secrets.WP_PASSWORD }}" | base64)" \
-                  -H "Content-Type: application/json; charset=utf-8" \
-                  --data-binary "$JSON_DATA"
-              fi
-            fi
-          done
+          curl -X PUT "$WP_BASE_URL/wp-json/wp/v2/posts/$POST_ID" \
+            -H "Authorization: Basic $(echo -n "${{ secrets.WP_USERNAME }}:${{ secrets.WP_PASSWORD }}" | base64)" \
+            -H "Content-Type: application/json; charset=utf-8" \
+            --data-binary "$JSON_DATA"
+        fi
+      fi
+    done
