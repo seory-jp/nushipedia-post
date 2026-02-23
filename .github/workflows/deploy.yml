@@ -16,25 +16,48 @@ jobs:
 
       - name: Send to WordPress
         run: |
+          # 1. content/wiki ディレクトリ内の .md ファイルを検索
           FILES=$(find content/wiki -name "*.md")
+          
           for FILE in $FILES; do
             if [ -f "$FILE" ]; then
+              
+              # 2. パスからファイル名のみを取り出し、拡張子 .md を削除して ID を取得
+              FILENAME=$(basename "$FILE")
+              POST_ID="${FILENAME%.*}"
 
-              POST_ID=$(basename "$FILE" .md)
-
-              if [ -n "$POST_ID" ]; then
+              # 3. POST_ID が数字のみであることを確認（不正なファイル名や空回りを防止）
+              if [[ "$POST_ID" =~ ^[0-9]+$ ]]; then
+                echo "----------------------------------------"
                 echo "Processing Post ID: $POST_ID"
 
-                # ★修正1: WP APIに合わせてJSON構造を簡略化 ({ content: . })
+                # 4. JSONデータの作成（WP APIに合わせ、content直下に流し込む）
                 JSON_DATA=$(jq -Rs --arg status "publish" '{content: ., status: $status}' < "$FILE")
 
+                # 末尾のスラッシュを削除したベースURL
                 WP_BASE_URL=$(echo "${{ secrets.WP_URL }}" | sed 's:/*$::')
 
-                # ★修正2: curl に -sS --fail を追加して、エラー時にログを出力して処理を停止させる
-                curl -sS --fail -X PUT "$WP_BASE_URL/wp-json/wp/v2/posts/$POST_ID" \
+                # 5. WordPress API へのリクエスト（詳細なレスポンスを取得）
+                RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT "$WP_BASE_URL/wp-json/wp/v2/posts/$POST_ID" \
                   -H "Authorization: Basic $(echo -n "${{ secrets.WP_USERNAME }}:${{ secrets.WP_PASSWORD }}" | base64)" \
                   -H "Content-Type: application/json; charset=utf-8" \
-                  --data-binary "$JSON_DATA" || { echo "::error::WPへの送信に失敗しました (POST_ID: $POST_ID)"; exit 1; }
+                  --data-binary "$JSON_DATA")
+
+                # レスポンスからステータスコード（最後の3桁）を抽出
+                HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+                
+                if [ "$HTTP_STATUS" -eq 200 ]; then
+                  echo "SUCCESS: Post ID $POST_ID has been updated."
+                else
+                  echo "::error::FAILED: Post ID $POST_ID (HTTP Status: $HTTP_STATUS)"
+                  # 必要に応じてエラー時の詳細レスポンスを表示（デバッグ用）
+                  echo "Response body: $(echo "$RESPONSE" | sed '$d')"
+                  exit 1
+                fi
+              else
+                echo "SKIP: '$FILE' is not a valid numeric Post ID. Skipping..."
               fi
             fi
           done
+          echo "----------------------------------------"
+          echo "All processes completed."
