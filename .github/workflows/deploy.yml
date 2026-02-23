@@ -20,7 +20,7 @@ jobs:
           for FILE in $FILES; do
             if [ -f "$FILE" ]; then
 
-              POST_ID=$(grep -oE 'WP_POST_ID:[[:space:]]*[0-9]+' "$FILE" | grep -oE '[0-9]+' | head -n 1 || true)
+              POST_ID=$(basename "$FILE" .md)
 
               if [ -n "$POST_ID" ]; then
                 echo "Processing Post ID: $POST_ID"
