@@ -27,7 +27,7 @@ jobs:
                 # WordPress が確実に本文を更新する JSON
                 JSON_DATA=$(jq -c -n \
                   --rawfile content "$FILE" \
-                  '{"content": {"raw": $content}, "status": "publish"}')
+                  '{"content": {"raw": $content}, "status": "publish", "type": "wiki"}'
 
                 WP_BASE_URL=$(echo "${{ secrets.WP_URL }}" | sed 's:/*$::')
 
