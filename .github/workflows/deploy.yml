@@ -25,9 +25,8 @@ jobs:
               if [ -n "$POST_ID" ]; then
                 echo "Processing Post ID: $POST_ID"
 
-                JSON_DATA=$(jq -c -n \
-                  --rawfile content "$FILE" \
-                  '{"content": {"raw": $content}, "status": "publish"}')
+                JSON_DATA=$(jq -Rs --arg status "publish" \
+                  '{content:{raw:.}, status:$status}' < "$FILE")
 
                 WP_BASE_URL=$(echo "${{ secrets.WP_URL }}" | sed 's:/*$::')
 
