@@ -25,15 +25,16 @@ jobs:
               if [ -n "$POST_ID" ]; then
                 echo "Processing Post ID: $POST_ID"
 
-                JSON_DATA=$(jq -Rs --arg status "publish" \
-                  '{content:{raw:.}, status:$status}' < "$FILE")
+                # ★修正1: WP APIに合わせてJSON構造を簡略化 ({ content: . })
+                JSON_DATA=$(jq -Rs --arg status "publish" '{content: ., status: $status}' < "$FILE")
 
                 WP_BASE_URL=$(echo "${{ secrets.WP_URL }}" | sed 's:/*$::')
 
-                curl -X PUT "$WP_BASE_URL/wp-json/wp/v2/posts/$POST_ID" \
+                # ★修正2: curl に -sS --fail を追加して、エラー時にログを出力して処理を停止させる
+                curl -sS --fail -X PUT "$WP_BASE_URL/wp-json/wp/v2/posts/$POST_ID" \
                   -H "Authorization: Basic $(echo -n "${{ secrets.WP_USERNAME }}:${{ secrets.WP_PASSWORD }}" | base64)" \
                   -H "Content-Type: application/json; charset=utf-8" \
-                  --data-binary "$JSON_DATA"
+                  --data-binary "$JSON_DATA" || { echo "::error::WPへの送信に失敗しました (POST_ID: $POST_ID)"; exit 1; }
               fi
             fi
           done
